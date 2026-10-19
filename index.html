@@ -1929,4 +1929,98 @@ window.openInvoiceModal = function(orderId) {
     <div class="invoice-row total-row"><span>Total Bill Amount Paid</span><span>${formatPeso(order.price)}</span></div>
     ${isDeducted ? `
       <div class="invoice-row deduction-row"><span>Less: Automated 10% Cancellation Holding Fee (Within 2 Days)</span><span>-${formatPeso(order.holdingFeeDeducted)}</span></div>
-      <div class
+      <div class="invoice-row refund-row"><span>Net Automated Refund to Customer</span><span>${formatPeso(order.netRefundAmount)}</span></div>
+    ` : ''}
+  `;
+
+  modal.hidden = false;
+};
+
+document.getElementById('close-invoice-btn').addEventListener('click', () => {
+  document.getElementById('invoice-modal').hidden = true;
+});
+document.getElementById('print-invoice-btn').addEventListener('click', () => {
+  window.print();
+});
+
+/* ================= PORTAL TABS & CLEAN URL LOOKUP ================= */
+window.switchPortalTab = function(role) {
+  if (role === 'owner' && !isOwnerAuthenticated) return;
+  const isCust = role === 'customer';
+  document.getElementById('tab-customer').classList.toggle('is-active', isCust);
+  document.getElementById('tab-owner').classList.toggle('is-active', !isCust);
+  document.getElementById('panel-customer').hidden = !isCust;
+  document.getElementById('panel-owner').hidden = isCust;
+};
+
+document.getElementById('tab-customer').addEventListener('click', () => switchPortalTab('customer'));
+document.getElementById('tab-owner').addEventListener('click', () => {
+  if (!isOwnerAuthenticated) return;
+  switchPortalTab('owner');
+  renderOwnerDashboard();
+});
+
+document.getElementById('lookup-btn').addEventListener('click', () => {
+  const val = document.getElementById('lookup-id-input').value.trim().toUpperCase();
+  if (!val) return;
+  switchPortalTab('customer');
+  renderCustomerOrder(val);
+});
+
+function handleIncomingEmailLinks() {
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('order');
+  if (!orderId) return;
+
+  const orders = getOrders();
+  let existing = orders.find(o => o.id === orderId);
+
+  if (!existing && params.get('name')) {
+    const priceVal = parseFloat(params.get('price') || '8500');
+    const svcName = params.get('service') || 'Stamped & Decorative Concrete Package';
+    existing = {
+      id: orderId,
+      customerName: params.get('name') || 'Customer',
+      customerEmail: params.get('email') || '',
+      mobile: 'N/A',
+      organization: params.get('org') || 'Project Site',
+      serviceName: svcName,
+      cartItems: [{ id: 'stamped', name: svcName, unitPrice: priceVal, qty: 1 }],
+      details: 'Loaded from email link',
+      price: priceVal,
+      status: params.get('status') || 'PENDING_OWNER_APPROVAL',
+      createdAt: Date.now(),
+      acceptedAt: Date.now(),
+      paidAt: null,
+      invoiceNo: null,
+      holdingFeeDeducted: 0,
+      netRefundAmount: 0
+    };
+    orders.unshift(existing);
+    saveOrders(orders);
+  }
+
+  if (existing) {
+    activeOrderId = existing.id;
+    window.history.replaceState({}, document.title, window.location.pathname + '#order-portal');
+    switchPortalTab('customer');
+    renderCustomerOrder(existing.id);
+  }
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  const invModal = document.getElementById('invoice-modal');
+  if (invModal && !invModal.hidden) invModal.hidden = true;
+  else if (ownerAuthModal && !ownerAuthModal.hidden) ownerAuthModal.hidden = true;
+});
+
+// Initialize Cart, Checkout Bill, and Portal on Page Load
+renderCartAndCheckoutBill();
+renderCustomerOrder();
+renderOwnerDashboard();
+renderEmailLogs();
+handleIncomingEmailLinks();
+</script>
+</body>
+</html>
